@@ -34,6 +34,7 @@ func main() {
 	}
 
 	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, os.Kill)
 
 	target = flag.Args()[0]
 	if !strings.Contains(target, ":") {
@@ -41,8 +42,6 @@ func main() {
 	}
 
 	openConnections(target, numConnections, timeout)
-
-	signal.Notify(signals, os.Interrupt, os.Kill)
 
 loop:
 	for {
