@@ -103,6 +103,7 @@ loop:
 		for {
 			select {
 			case <-time.After(time.Duration(interval) * time.Second):
+				conn.SetWriteDeadline(time.Now().Add(timeoutDuration))
 				_, err := conn.Write([]byte("Cookie: a=b\r\n"))
 				if err != nil {
 					continue loop
