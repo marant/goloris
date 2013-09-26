@@ -61,8 +61,8 @@ loop:
 func parseParams() {
 	flag.IntVar(&numConnections, "connections", 10, "Number of active concurrent connections")
 	flag.IntVar(&interval, "interval", 1, "Number of seconds to wait between sending headers")
-	flag.IntVar(&timeout, "timeout", 60, "Timeout in seconds")
-	flag.StringVar(&method, "method", "GET", "HTTP method to user")
+	flag.IntVar(&timeout, "timeout", 60, "HTTP connection timeout in seconds")
+	flag.StringVar(&method, "method", "GET", "HTTP method to use")
 	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
 	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
 	flag.BoolVar(&https, "https", false, "Use HTTPS")
@@ -72,10 +72,15 @@ func parseParams() {
 func usage() {
 	fmt.Println("")
 	fmt.Println("usage: goloris [OPTIONS]... TARGET")
-	fmt.Println("  TARGET host:port. port 80 is assumed if not defined")
+	fmt.Println("  TARGET host:port. port 80 is assumed for HTTP connections. 443 is assumed for HTTPS connections")
 	fmt.Println("")
 	fmt.Println("OPTIONS")
 	flag.PrintDefaults()
+	fmt.Println("")
+	fmt.Println("EXAMPLES")
+	fmt.Printf("  %s -connections=500 192.168.0.1\n", os.Args[0])
+	fmt.Printf("  %s -https -connections=500 192.168.0.1\n", os.Args[0])
+	fmt.Printf("  %s -useragent=\"some user-agent string\" -https -connections=500 192.168.0.1\n", os.Args[0])
 	fmt.Println("")
 }
 
