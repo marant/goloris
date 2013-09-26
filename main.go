@@ -87,10 +87,16 @@ func usage() {
 }
 
 func slowloris(target, dosHeader, method, resource string, interval, timeout int, https bool) {
+	var conn net.Conn
+	var err error
 
 loop:
 	for {
-		conn, err := openConnection(target, timeout, https)
+		if conn != nil {
+			conn.Close()
+		}
+
+		conn, err = openConnection(target, timeout, https)
 		if err != nil {
 			continue
 		}
