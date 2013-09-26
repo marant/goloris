@@ -113,9 +113,8 @@ loop:
 			defer conn.Close()
 		}
 
-		host := target
-		headers := makeHeaders(host)
-		req, err := createRequest(host, method, resource, headers)
+		headers := makeHeaders(target)
+		req, err := createRequest(target, method, resource, headers)
 		if err != nil {
 			fmt.Println(err.Error())
 			continue
