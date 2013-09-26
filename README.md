@@ -1,7 +1,7 @@
 goloris
 =======
 
-Slowloris HTTP DoS implementation in golang.
+[Slowloris HTTP DoS](http://ckers.org/slowloris/) implementation in golang.
 
 ```
  usage: goloris [OPTIONS]... TARGET
