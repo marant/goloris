@@ -37,6 +37,7 @@ func main() {
 		dosHeader      string
 	)
 
+	flag.Usage = usage
 	flag.IntVar(&numConnections, "connections", 10, "Number of active concurrent connections")
 	flag.IntVar(&interval, "interval", 1, "Number of seconds to wait between sending headers")
 	flag.IntVar(&timeout, "timeout", 60, "HTTP connection timeout in seconds")
