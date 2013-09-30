@@ -15,6 +15,13 @@ import (
 const (
 	defaultUserAgent = "Goloris HTTP DoS"
 	defaultDOSHeader = "Cookie: a=b"
+	legalDisclaimer  = `Usage of this program for attacking targets without prior mutual consent is
+illegal. It is the end user's responsibility to obey all applicable local, 
+state and federal laws. Developers assume no liability and are not 
+responsible for any misuse or damage caused by this program.
+
+This disclaimer was shamelessy copied from sqlmap with minor modifications :)
+    `
 )
 
 func main() {
@@ -84,6 +91,7 @@ func usage() {
 	fmt.Printf("  %s -https -connections=500 192.168.0.1\n", os.Args[0])
 	fmt.Printf("  %s -useragent=\"some user-agent string\" -https -connections=500 192.168.0.1\n", os.Args[0])
 	fmt.Println("")
+	fmt.Println(legalDisclaimer)
 }
 
 func slowloris(target, dosHeader, method, resource string, interval, timeout int, https bool) {
