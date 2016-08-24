@@ -190,8 +190,9 @@ func openConnection(opts options) (net.Conn, error) {
 	timeoutDuration := opts.timeout
 
 	if opts.https {
+		dial := &net.Dialer{Timeout: timeoutDuration}
 		config := &tls.Config{InsecureSkipVerify: true}
-		conn, err = tls.Dial("tcp", opts.target, config)
+		conn, err = tls.DialWithDialer(dial, "tcp", opts.target, config)
 		if err != nil {
 			return nil, err
 		}
