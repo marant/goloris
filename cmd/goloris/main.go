@@ -157,7 +157,7 @@ loop:
 			continue
 		}
 
-		header := createHeader(opts.target)
+		header := createHeader(opts)
 		if err = header.Write(conn); err != nil {
 			continue
 		}
@@ -205,11 +205,11 @@ func openConnection(opts options) (net.Conn, error) {
 	return conn, nil
 }
 
-func createHeader(host string) *http.Header {
+func createHeader(opts options) *http.Header {
 	hdr := http.Header{}
 
-	hdr.Add("Host", host)
-	hdr.Add("User-Agent", defaultUserAgent)
+	hdr.Add("Host", opts.target)
+	hdr.Add("User-Agent", opts.userAgent)
 
 	return &hdr
 }
