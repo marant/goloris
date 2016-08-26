@@ -187,17 +187,16 @@ loop:
 func openConnection(opts options) (net.Conn, error) {
 	var conn net.Conn
 	var err error
-	timeoutDuration := opts.timeout
 
 	if opts.https {
-		dial := &net.Dialer{Timeout: timeoutDuration}
+		dial := &net.Dialer{Timeout: opts.timeout}
 		config := &tls.Config{InsecureSkipVerify: true}
 		conn, err = tls.DialWithDialer(dial, "tcp", opts.target, config)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		conn, err = net.DialTimeout("tcp", opts.target, timeoutDuration)
+		conn, err = net.DialTimeout("tcp", opts.target, opts.timeout)
 		if err != nil {
 			return nil, err
 		}
