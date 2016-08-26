@@ -36,6 +36,22 @@ type options struct {
 	dosHeader      string
 	timermode      bool
 	finishAfter    time.Duration
+	quiet          bool
+}
+
+func (o *options) String() string {
+	return fmt.Sprintf("====== OPTIONS ======\n"+
+		"connections:   %d\n"+
+		"interval:      %s\n"+
+		"timeout:       %s\n"+
+		"method:        %s\n"+
+		"resource:      %s\n"+
+		"user agent:    %s\n"+
+		"target:        %s\n"+
+		"https:         %t\n"+
+		"DOS header:    %s\n"+
+		"finish after:  %s\n\n", o.numConnections, o.interval, o.timeout, o.method,
+		o.resource, o.userAgent, o.target, o.https, o.dosHeader, o.finishAfter)
 }
 
 func main() {
@@ -51,6 +67,7 @@ func main() {
 	flag.StringVar(&opts.dosHeader, "dosHeader", defaultDOSHeader, "Header to send repeatedly")
 	flag.BoolVar(&opts.https, "https", false, "Use HTTPS")
 	flag.BoolVar(&opts.timermode, "timermode", false, "Measure the timeout of the server. connections flag is omitted")
+	flag.BoolVar(&opts.quiet, "quiet", false, "forward stdout to /dev/null")
 	flag.DurationVar(&opts.finishAfter, "finishafter", 0, "Seconds to wait before finishing the request. If zero the request is never finished")
 	flag.Parse()
 
@@ -62,6 +79,14 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill)
 
+	if opts.quiet {
+		devNull, err := os.Open(os.DevNull)
+		if err != nil {
+			panic(fmt.Sprintf("can't open %s this should not happen!", os.DevNull))
+		}
+		os.Stdout = devNull
+	}
+
 	opts.target = flag.Args()[0]
 	if !strings.Contains(opts.target, ":") {
 		if opts.https {
@@ -70,6 +95,8 @@ func main() {
 			opts.target += ":80"
 		}
 	}
+
+	fmt.Printf(opts.String())
 
 	if opts.timermode {
 		go timer(opts)
