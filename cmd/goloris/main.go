@@ -208,19 +208,8 @@ func openConnection(opts options) (net.Conn, error) {
 func createHeader(host string) *http.Header {
 	hdr := http.Header{}
 
-	headers := makeHeaderSlice(host)
-	for header, value := range headers {
-		hdr.Add(header, value)
-	}
+	hdr.Add("Host", host)
+	hdr.Add("User-Agent", defaultUserAgent)
 
 	return &hdr
-}
-
-func makeHeaderSlice(host string) map[string]string {
-	headers := make(map[string]string)
-
-	headers["Host"] = host
-	headers["User-Agent"] = defaultUserAgent
-
-	return headers
 }
