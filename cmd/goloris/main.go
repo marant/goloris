@@ -74,6 +74,7 @@ func main() {
 	if opts.timermode {
 		go timer(opts)
 	} else {
+		fmt.Printf("Attacking %s with %d connections\n", opts.target, opts.numConnections)
 		for i := 0; i < opts.numConnections; i++ {
 			go slowloris(opts)
 		}
