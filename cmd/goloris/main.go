@@ -107,12 +107,17 @@ func main() {
 		}
 	}
 
+	started := time.Now()
+	ticker := time.Tick(1 * time.Second)
 loop:
 	for {
 		select {
 		case <-signals:
-			fmt.Printf("Received SIGKILL, exiting...\n")
+			fmt.Printf("\nReceived SIGKILL, exiting...\n")
 			break loop
+		case <-ticker:
+			dur := time.Now().Sub(started)
+			fmt.Printf("Attack duration: %dh %dm %ds\r", int(dur.Hours()), int(dur.Minutes()), int(dur.Seconds()))
 		}
 	}
 }
